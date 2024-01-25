@@ -1,0 +1,5 @@
+lib
+
+src/include/G4Goupil.hh
+src/include/goupil.h
+src/src/G4Goupil.cc

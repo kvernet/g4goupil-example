@@ -2,9 +2,7 @@
 #define g4geometry_h
 
 /* Geant4 interface */
-#include "G4Material.hh"
 #include "G4VUserDetectorConstruction.hh"
-#include "G4VPhysicalVolume.hh"
 /* Goupil interface */
 #include "goupil.h"
 
@@ -24,10 +22,7 @@ struct DetectorConstruction : public G4VUserDetectorConstruction {
         static DetectorConstruction * Singleton();
         G4VPhysicalVolume * Construct();
         
-        void ToDetector(double pos[3]);
-        
-        void RandomiseState(struct goupil_state * state,
-                const bool& in_air=true);
+        void RandomiseState(struct goupil_state * state);
         
         G4double worldSize[3], detectorSize[3];
         G4double airSize[3], groundSize[3];
@@ -36,11 +31,6 @@ struct DetectorConstruction : public G4VUserDetectorConstruction {
     private:
         DetectorConstruction();
         ~DetectorConstruction() override = default;
-        
-        G4LogicalVolume * PlaceInVolume(const std::string& name,
-                G4double dim[3], G4Material * material,
-                G4RotationMatrix * rot, G4ThreeVector pos,
-                G4LogicalVolume * motherVolume);
         
         std::array<std::pair<double, double>, 11> spectrum = {
             // Po^218 -> Pb^214.

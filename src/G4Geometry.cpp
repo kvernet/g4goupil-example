@@ -2,9 +2,10 @@
 /* Geant4 interface */
 #include "G4Box.hh"
 #include "G4LogicalVolume.hh"
-#include "G4Navigator.hh"
+#include "G4Material.hh"
 #include "G4NistManager.hh"
 #include "G4PVPlacement.hh"
+#include "G4VPhysicalVolume.hh"
 #include "G4VUserDetectorConstruction.hh"
 #include "Randomize.hh"
 /* Goupil interface */
@@ -13,6 +14,11 @@
 #ifndef M_PI
 #define M_PI 3.1415926535897
 #endif
+
+static G4LogicalVolume * PlaceInVolume(const std::string& name,
+        G4double dim[3], G4Material * material,
+        G4RotationMatrix * rot, G4ThreeVector pos,
+        G4LogicalVolume * motherVolume);   
 
 DetectorConstruction::DetectorConstruction() {
     this->detectorSize[0] = this->detectorSize[1] = 20.0*CLHEP::m;
@@ -65,7 +71,7 @@ G4VPhysicalVolume * DetectorConstruction::Construct() {
         std::string name = "Air";
         auto material = manager->FindOrBuildMaterial("G4_AIR");
         G4ThreeVector pos(0.0, 0.0, 0.5*this->groundSize[2]);
-        airVolume = this->PlaceInVolume(name, this->airSize,
+        airVolume = PlaceInVolume(name, this->airSize,
                 material, nullptr, pos, world);
     }
     
@@ -73,7 +79,7 @@ G4VPhysicalVolume * DetectorConstruction::Construct() {
         std::string name = "Ground";
         auto material = manager->FindOrBuildMaterial("G4_CALCIUM_CARBONATE");
         G4ThreeVector pos(0.0, 0.0, -0.5*this->airSize[2]);
-        this->PlaceInVolume(name, this->groundSize,
+        PlaceInVolume(name, this->groundSize,
                 material, nullptr, pos, world);
     }
     
@@ -81,7 +87,7 @@ G4VPhysicalVolume * DetectorConstruction::Construct() {
         std::string name = "Detector";
         auto material = manager->FindOrBuildMaterial("G4_AIR");
         G4ThreeVector pos(0.0, 0.0, this->detectorOffset - 0.5*this->groundSize[2]);
-        this->PlaceInVolume(name, this->detectorSize,
+        PlaceInVolume(name, this->detectorSize,
                 material, nullptr, pos, airVolume);
     }
     
@@ -96,7 +102,7 @@ G4VPhysicalVolume * DetectorConstruction::Construct() {
     );
 }
 
-G4LogicalVolume * DetectorConstruction::PlaceInVolume(const std::string& name,
+G4LogicalVolume * PlaceInVolume(const std::string& name,
         G4double dim[3], G4Material * material,
         G4RotationMatrix * rot, G4ThreeVector pos,
         G4LogicalVolume * motherVolume) {
@@ -114,12 +120,7 @@ G4LogicalVolume * DetectorConstruction::PlaceInVolume(const std::string& name,
     return logicalVolume;
 }
 
-void DetectorConstruction::ToDetector(double pos[3]) {
-    pos[2] -= this->detectorOffset;
-}
-
-void DetectorConstruction::RandomiseState(struct goupil_state * state,
-        const bool& in_air) {
+void DetectorConstruction::RandomiseState(struct goupil_state * state) {
     const double cosTheta = 2.0 * G4UniformRand() - 1.0;
     const double sinTheta = std::sqrt(1.0 - cosTheta*cosTheta);
     const double phi = 2.0 * M_PI * G4UniformRand();
@@ -133,42 +134,30 @@ void DetectorConstruction::RandomiseState(struct goupil_state * state,
     
     /* Set position */
     G4ThreeVector position(0.0, 0.0, 0.0);
-    if(in_air) {
-        const auto airOffset = 0.5 * this->groundSize[2];
-        for (;;) {
-            position[0] = this->airSize[0] * (0.5 - G4UniformRand());
-            position[1] = this->airSize[1] * (0.5 - G4UniformRand());
-            position[2] = this->airSize[2] * (0.5 - G4UniformRand()) + airOffset;
+    const auto airOffset = 0.5 * this->groundSize[2];
+    for (;;) {
+        position[0] = this->airSize[0] * (0.5 - G4UniformRand());
+        position[1] = this->airSize[1] * (0.5 - G4UniformRand());
+        position[2] = this->airSize[2] * (0.5 - G4UniformRand()) + airOffset;
             
-            if ((std::fabs(position[0]) > 0.5 * this->detectorSize[0]) ||
-                (std::fabs(position[1]) > 0.5 * this->detectorSize[1]) ||
-                (std::fabs(position[2] - this->detectorOffset) > 0.5 * this->detectorSize[2])
-            ) {
-                break;
-            }
+        if ((std::fabs(position[0]) > 0.5 * this->detectorSize[0]) ||
+            (std::fabs(position[1]) > 0.5 * this->detectorSize[1]) ||
+            (std::fabs(position[2] - this->detectorOffset) > 0.5 * this->detectorSize[2])
+        ) {
+            break;
         }
-    }
-    else {
-        const auto offset = -0.5 * this->airSize[2];
-        position[0] = (this->detectorSize[0] +
-                4.0 * this->groundSize[2]) * (0.5 - G4UniformRand());
-        position[1] = (this->detectorSize[1] +
-                4.0 * this->groundSize[2]) * (0.5 - G4UniformRand());
-        position[2] = this->groundSize[2] * (0.5 - G4UniformRand()) + offset;
     }
     state->position.x = position[0] / CLHEP::cm;
     state->position.y = position[1] / CLHEP::cm;
     state->position.z = position[2] / CLHEP::cm;
     
-    /* Set energy if negative */    
-    if (state->energy <= 0.0) {
-        state->energy = this->spectrum.back().first;
-        const double u = G4UniformRand();
-        for (auto pair: this->spectrum) {
-            if (u <= pair.second) {
-                state->energy = pair.first;
-                break;
-            }
+    /* Set energy */    
+    state->energy = this->spectrum.back().first;
+    const double u = G4UniformRand();
+    for (auto pair: this->spectrum) {
+        if (u <= pair.second) {
+            state->energy = pair.first;
+            break;
         }
     }
 }
@@ -212,10 +201,9 @@ __attribute__((constructor)) static void initialize() {
     InitialisePrng();
 }
 
-void g4randomize_states(size_t size, struct goupil_state * states, bool in_air) {
+void g4randomize_states(size_t size, struct goupil_state * states) {
     for (; size > 0; size--, states++) {
-        DetectorConstruction::Singleton()->RandomiseState(
-                states, in_air);
+        DetectorConstruction::Singleton()->RandomiseState(states);
     }
 }
 }

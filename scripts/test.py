@@ -27,6 +27,7 @@ clib.g4randomize_states(states.size, states.ctypes.data)
 primaries = states.copy()
 status = engine.transport(states)
 
+import numpy
 from goupil_analysis import DataSummary
 sel0 = (status == goupil.TransportStatus.BOUNDARY) & (states["energy"] < primaries["energy"])
 sel1 = (status == goupil.TransportStatus.BOUNDARY) & (states["energy"] == primaries["energy"])

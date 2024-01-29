@@ -162,6 +162,81 @@ void DetectorConstruction::RandomiseState(struct goupil_state * state) {
     }
 }
 
+double DetectorConstruction::RandomiseBackward(struct goupil_state * state) {
+    // Sample face according to respective surfaces.
+    double c[3] = { 0.0, 0.0, 0.0 };
+    double s = 0.0;
+    int axis;
+    for (axis = 0; axis < 3; axis++) {
+        s += this->detectorSize[(axis + 1) % 3] *
+             this->detectorSize[(axis + 2) % 3];
+        c[axis] = s;
+    }
+    const double r = s * G4UniformRand();
+    for (axis = 0; axis < 3; axis++) {
+        if (r <= c[axis]) break;
+    }
+    if (axis == 3) axis = 2;
+    const double delta = (axis > 0) ? c[axis] - c[axis - 1] : c[0];
+    const int dir = ((c[axis] - r) > 0.5 * delta) ? -1 : 1;
+
+    // Sample position.
+    double position[3];
+    double detectorPosition[3] = { 0.0, 0.0, this->detectorOffset };
+    position[axis] = dir * (0.5 * this->detectorSize[axis]
+        + 1.0 * CLHEP::um) + detectorPosition[axis];
+    for (int i = 0; i < 2; i++) {
+        const int ii = (axis + i + 1) % 3;
+        position[ii] = this->detectorSize[ii] * (0.5 - G4UniformRand())
+            + detectorPosition[ii];
+    }
+    for (int i = 0; i < 3; i++) {
+        position[i] /= CLHEP::cm;
+    }
+    double w = 2 * c[2] / CLHEP::cm2;
+
+    // Sample direction.
+    const double u = G4UniformRand();
+    const double cos_theta = sqrt(u);
+    const double sin_theta = sqrt(1.0 - u);
+    double direction[3];
+    const double phi = 2.0 * M_PI * G4UniformRand();
+    direction[(axis + 1) % 3] = -dir * sin_theta * cos(phi);
+    direction[(axis + 2) % 3] = -dir * sin_theta * sin(phi);
+    direction[axis] = -dir * cos_theta;
+    w *= M_PI;
+
+    // Sample source energy.  
+    double source_energy = this->spectrum.back().first;
+    {
+        const double zeta = G4UniformRand();
+        for (auto pair: this->spectrum) {
+            if (zeta <= pair.second) {
+                source_energy = pair.first;
+                break;
+            }
+        }
+    }
+    
+    // Sample state energy.
+    const double emin = 1E-02;
+    const double lnr = std::log(source_energy / emin);
+    const double energy = emin * std::exp(lnr * G4UniformRand());
+    w *= energy * lnr;
+    
+    // Set state.
+    state->energy = energy;
+    state->position.x = position[0];
+    state->position.y = position[1];
+    state->position.z = position[2];
+    state->direction.x = direction[0];
+    state->direction.y = direction[1];
+    state->direction.z = direction[2];
+    state->weight = w;
+    
+    return source_energy;
+}
+
 /* Goupil interface */
 const G4VPhysicalVolume * G4Goupil::NewGeometry() {
     /* Build the geometry and return the top "World" volume */
@@ -205,5 +280,20 @@ void g4randomize_states(size_t size, struct goupil_state * states) {
     for (; size > 0; size--, states++) {
         DetectorConstruction::Singleton()->RandomiseState(states);
     }
+}
+
+void g4randomize_backward(
+    size_t size, struct goupil_state * states, double * sources_energies) {
+    for (; size > 0; size--, states++, sources_energies++) {
+        *sources_energies = DetectorConstruction::Singleton()->RandomiseBackward(states);
+    }
+}
+
+double g4randomize_source_volume(void) {
+    auto airSize = DetectorConstruction::Singleton()->airSize;
+    const double airVolume = airSize[0] * airSize[1] * airSize[2];
+    auto detSize = DetectorConstruction::Singleton()->detectorSize;
+    const double detVolume = detSize[0] * detSize[1] * detSize[2];
+    return (airVolume - detVolume) / CLHEP::cm3;
 }
 }

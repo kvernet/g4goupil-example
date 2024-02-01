@@ -33,7 +33,7 @@ clib.g4randomize_backward(states.size, states.ctypes.data, sources_energies.ctyp
 expected = states.copy()
 status = engine.transport(states, sources_energies)
 
-from goupil_analysis import DataSummary
+from goupil_analysis import DataSummary, Histogramed
 
 expected["weight"] = states["weight"]
 primaries = states
@@ -54,6 +54,9 @@ for i, sel in enumerate((sel0, sel1)):
     distances = numpy.linalg.norm(s["position"] - p["position"], axis=1)
     tag = "continuous" if i == 0 else "discrete"
     data[tag] = DataSummary.new(states.size, energies, cos_theta, distances, s["weight"])
+
+s = states[sel0]
+data["energy_thin"] = Histogramed.energy_thin(states.size, s["energy"], s["weight"])
 
 with open("goupil.backward.pkl", "wb") as f:
     pickle.dump(data, f)

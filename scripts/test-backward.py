@@ -22,13 +22,15 @@ states = goupil.states(10000000)
 sources_energies = numpy.empty(states.size)
 
 # Prototype library functions.
-clib.g4randomize_backward.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p]
+clib.g4randomize_backward.argtypes = [ctypes.c_double, ctypes.c_size_t,
+                                      ctypes.c_void_p, ctypes.c_void_p]
 clib.g4randomize_backward.restype = None
 
 clib.g4randomize_source_volume.argtypes = []
 clib.g4randomize_source_volume.restype = ctypes.c_double
 
-clib.g4randomize_backward(states.size, states.ctypes.data, sources_energies.ctypes.data)
+clib.g4randomize_backward(
+    1.0, states.size, states.ctypes.data, sources_energies.ctypes.data)
 
 expected = states.copy()
 status = engine.transport(states, sources_energies)
@@ -52,8 +54,14 @@ for i, sel in enumerate((sel0, sel1)):
     energies = s["energy"]
     cos_theta = numpy.sum(s["direction"] * p["direction"], axis=1)
     distances = numpy.linalg.norm(s["position"] - p["position"], axis=1)
-    tag = "continuous" if i == 0 else "discrete"
-    data[tag] = DataSummary.new(states.size, energies, cos_theta, distances, s["weight"])
+    if i == 0:
+        tag = "continuous"
+        discrete = False
+    else:
+        tag = "discrete"
+        discrete = True
+    data[tag] = DataSummary.new(states.size, energies, cos_theta, distances,
+                                s["weight"], discrete=discrete)
 
 s = states[sel0]
 data["energy_thin"] = Histogramed.energy_thin(states.size, s["energy"], s["weight"])

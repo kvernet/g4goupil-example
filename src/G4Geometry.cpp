@@ -162,7 +162,8 @@ void DetectorConstruction::RandomiseState(struct goupil_state * state) {
     }
 }
 
-double DetectorConstruction::RandomiseBackward(struct goupil_state * state) {
+double DetectorConstruction::RandomiseBackward(
+    double alpha, struct goupil_state * state) {
     // Sample face according to respective surfaces.
     double c[3] = { 0.0, 0.0, 0.0 };
     double s = 0.0;
@@ -217,12 +218,18 @@ double DetectorConstruction::RandomiseBackward(struct goupil_state * state) {
             }
         }
     }
-    
-    // Sample state energy.
-    const double emin = 1E-02;
-    const double lnr = std::log(source_energy / emin);
-    const double energy = emin * std::exp(lnr * G4UniformRand());
-    w *= energy * lnr;
+
+    double energy;
+    if (G4UniformRand() < alpha) {
+        energy = source_energy;
+        w /= alpha;
+    } else {
+        // Sample state energy.
+        const double emin = 1E-02;
+        const double lnr = std::log(source_energy / emin);
+        energy = emin * std::exp(lnr * G4UniformRand());
+        w *= energy * lnr / (1.0 - alpha);
+    }
     
     // Set state.
     state->energy = energy;
@@ -283,9 +290,13 @@ void g4randomize_states(size_t size, struct goupil_state * states) {
 }
 
 void g4randomize_backward(
-    size_t size, struct goupil_state * states, double * sources_energies) {
+    double alpha,
+    size_t size,
+    struct goupil_state * states,
+    double * sources_energies) {
     for (; size > 0; size--, states++, sources_energies++) {
-        *sources_energies = DetectorConstruction::Singleton()->RandomiseBackward(states);
+        *sources_energies =
+            DetectorConstruction::Singleton()->RandomiseBackward(alpha, states);
     }
 }
 

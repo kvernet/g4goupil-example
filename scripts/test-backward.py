@@ -16,7 +16,7 @@ geometry = goupil.ExternalGeometry(lib_path)
 # Define & configure the engine transport
 engine = goupil.TransportEngine(geometry)
 engine.mode = "Backward"
-engine.boundary = 2 # Termination when sector with index 2 is entered. 
+engine.boundary = 2 # Termination when sector with index 2 is entered.
 
 states = goupil.states(10000000)
 sources_energies = numpy.empty(states.size)

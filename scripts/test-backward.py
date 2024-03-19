@@ -30,7 +30,7 @@ clib.g4randomize_source_volume.argtypes = []
 clib.g4randomize_source_volume.restype = ctypes.c_double
 
 clib.g4randomize_backward(
-    1.0, states.size, states.ctypes.data, sources_energies.ctypes.data)
+    0.5, states.size, states.ctypes.data, sources_energies.ctypes.data)
 
 expected = states.copy()
 status = engine.transport(states, sources_energies)
